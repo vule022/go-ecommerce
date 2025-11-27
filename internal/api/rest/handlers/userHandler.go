@@ -18,8 +18,9 @@ func SetupUserRoutes(rh *rest.RestHandler) {
 	app := rh.App
 
 	svc := service.UserService{
-		Repo: repository.NewUserRepository(rh.DB),
-		Auth: rh.Auth,
+		Repo:   repository.NewUserRepository(rh.DB),
+		Auth:   rh.Auth,
+		Config: rh.Config,
 	}
 
 	handler := UserHandler{
@@ -105,17 +106,16 @@ func (h *UserHandler) GetVerificationCode(ctx *fiber.Ctx) error {
 	user := h.svc.Auth.GetCurrentUser(ctx)
 
 	//create and db update verification code
-	code, err := h.svc.GetVerificationCode(user)
+	err := h.svc.GetVerificationCode(user)
 
 	if err != nil {
 		return ctx.Status(http.StatusInternalServerError).JSON(&fiber.Map{
-			"message": "unable to genereate verification code",
+			"message": "unable to generate verification code",
 		})
 	}
 
 	return ctx.Status(http.StatusOK).JSON(&fiber.Map{
 		"message": "get verification code",
-		"data":    code,
 	})
 }
 
@@ -189,7 +189,26 @@ func (h *UserHandler) GetOrder(ctx *fiber.Ctx) error {
 }
 
 func (h *UserHandler) BecomeSeller(ctx *fiber.Ctx) error {
+	user := h.svc.Auth.GetCurrentUser(ctx)
+
+	req := dto.SellerInput{}
+	err := ctx.BodyParser(&req)
+
+	if err != nil {
+		return ctx.Status(400).JSON(&fiber.Map{
+			"message": "req params not valid",
+		})
+	}
+
+	token, err := h.svc.BecomeSeller(user.ID, req)
+	if err != nil {
+		return ctx.Status(400).JSON(&fiber.Map{
+			"message": "failed to become seller",
+		})
+	}
+
 	return ctx.Status(http.StatusOK).JSON(&fiber.Map{
-		"message": "become seller",
+		"message": "became seller",
+		"token":   token,
 	})
 }

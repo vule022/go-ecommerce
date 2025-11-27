@@ -2,17 +2,21 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"go-microservices/config"
 	"go-microservices/internal/domain"
 	"go-microservices/internal/dto"
 	"go-microservices/internal/helper"
 	"go-microservices/internal/repository"
+	"go-microservices/pkg/notification"
 	"log"
 	"time"
 )
 
 type UserService struct {
-	Repo repository.UserRepository
-	Auth helper.Auth
+	Repo   repository.UserRepository
+	Auth   helper.Auth
+	Config config.AppConfig
 }
 
 func (s UserService) findUserByEmail(email string) (*domain.User, error) {
@@ -66,15 +70,15 @@ func (s UserService) isVerifiedUser(id uint) bool {
 	return err == nil && currentUser.Verified
 }
 
-func (s UserService) GetVerificationCode(e domain.User) (int, error) {
+func (s UserService) GetVerificationCode(e domain.User) error {
 	if s.isVerifiedUser(e.ID) {
-		return 0, errors.New("user already verfied")
+		return errors.New("user already verfied")
 	}
 
 	code, err := s.Auth.GenerateCode()
 
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	user := domain.User{
@@ -85,10 +89,22 @@ func (s UserService) GetVerificationCode(e domain.User) (int, error) {
 	_, err = s.Repo.UpdateUser(e.ID, user)
 
 	if err != nil {
-		return 0, errors.New("unable to update verification code")
+		return errors.New("unable to update verification code")
 	}
 
-	return code, nil
+	user, _ = s.Repo.FindUserById(e.ID)
+
+	notificationClient := notification.NewNotificationClient(s.Config)
+
+	msg := fmt.Sprintf("Your verification code is: %v", code)
+
+	err = notificationClient.SendSMS(user.Phone, msg)
+
+	if err != nil {
+		return errors.New("verification code not sent")
+	}
+
+	return nil
 }
 
 func (s UserService) VerifyCode(id uint, code int) error {
@@ -139,8 +155,8 @@ func (s UserService) UpdateProfile(id uint, input any) error {
 	return nil
 }
 
-func (s UserService) BecomeSeller(id uint, input any) (string, error) {
-	//logic
+func (s UserService) BecomeSeller(id uint, input dto.SellerInput) (string, error) {
+
 	return "", nil
 }
 
